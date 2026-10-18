@@ -25,8 +25,11 @@ python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
 # CLI — one video in, clips out:
 ./venv/bin/python clip.py myvideo.mp4 --clips 5 --out output
 
+# or paste a link (YouTube etc.) — it downloads then clips:
+./venv/bin/python clip.py --url "https://www.youtube.com/watch?v=..."
+
 # Web UI:
-./venv/bin/python web/app.py   # → http://localhost:5057
+./venv/bin/python web/app.py   # → http://localhost:5057  (upload or paste a link)
 ```
 
 Note: model download needs working HTTPS. If your shell has a broken

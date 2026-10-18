@@ -46,21 +46,36 @@ button:disabled{opacity:.5}
   <input type="file" name="video" accept="video/*" required>
   <button type="submit" id="btn">Make clips</button>
 </form>
+<p style="text-align:center;color:#888">— or —</p>
+<form id="fu">
+  <input type="url" name="url" id="url" placeholder="Paste a YouTube link…" required
+    style="width:70%;padding:.6rem;border:1px solid #ccc;border-radius:8px">
+  <button type="submit" id="btn2">Clip this link</button>
+</form>
 <div id="status"></div>
 <div id="results"></div>
 <script>
 const f=document.getElementById('f'),st=document.getElementById('status'),
-      res=document.getElementById('results'),btn=document.getElementById('btn');
-f.onsubmit=async e=>{e.preventDefault();btn.disabled=true;
-  st.textContent='Uploading…';
-  const r=await fetch('/upload',{method:'POST',body:new FormData(f)});
-  const {job_id}=await r.json();st.textContent='Working… transcription → scoring → rendering';
+      res=document.getElementById('results'),btn=document.getElementById('btn'),
+      fu=document.getElementById('fu'),btn2=document.getElementById('btn2');
+function watch(job_id){st.textContent='Working… download → transcription → scoring → rendering';
   const t=setInterval(async()=>{
     const s=await (await fetch('/status/'+job_id)).json();
     st.textContent='Status: '+s.status+(s.detail?' — '+s.detail:'');
-    if(s.status==='done'){clearInterval(t);btn.disabled=false;show(s.clips);}
-    if(s.status==='error'){clearInterval(t);btn.disabled=false;}
-  },3000);};
+    if(s.status==='done'){clearInterval(t);btn.disabled=false;btn2.disabled=false;show(s.clips);}
+    if(s.status==='error'){clearInterval(t);btn.disabled=false;btn2.disabled=false;}
+  },3000);}
+f.onsubmit=async e=>{e.preventDefault();btn.disabled=true;btn2.disabled=true;
+  st.textContent='Uploading…';
+  const r=await fetch('/upload',{method:'POST',body:new FormData(f)});
+  const {job_id}=await r.json();watch(job_id);};
+fu.onsubmit=async e=>{e.preventDefault();btn.disabled=true;btn2.disabled=true;
+  st.textContent='Fetching link…';
+  const fd=new FormData();fd.append('url',document.getElementById('url').value);
+  const r=await fetch('/ingest',{method:'POST',body:fd});
+  const j=await r.json();
+  if(j.error){st.textContent='Error: '+j.error;btn.disabled=false;btn2.disabled=false;return;}
+  watch(j.job_id);};
 function show(clips){res.innerHTML='<h2>Your clips</h2>'+clips.map(c=>`
   <div class="card"><span class="score">${c.score}</span><b>${c.title}</b>
   <div class="tag">${c.hashtags.join(' ')}</div>
@@ -75,8 +90,7 @@ def run_job(job_id, video_path, out_dir):
         from transcribe import transcribe
         from score import find_moments, make_hashtags
         from render import render_clip
-        jobs[job_id]["status"] = "transcribing"
-        segments, _ = transcribe(video_path)
+        jobs[job_id]["status"] = "transcribing"        segments, _ = transcribe(video_path)
         jobs[job_id]["status"] = "scoring"
         jobs[job_id]["detail"] = f"{len(segments)} segments"
         moments = find_moments(segments, min_score=50)
@@ -112,6 +126,29 @@ def upload():
     jobs[job_id] = {"status": "queued", "detail": "", "clips": []}
     threading.Thread(target=run_job, args=(job_id, vpath, out_dir),
                      daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/ingest", methods=["POST"])
+def ingest():
+    from ingest import download_url
+    url = (request.form.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "no URL"}), 400
+    job_id = uuid.uuid4().hex[:8]
+    out_dir = os.path.join(OUTPUTS, job_id)
+    os.makedirs(out_dir, exist_ok=True)
+    jobs[job_id] = {"status": "downloading", "detail": url[:60], "clips": []}
+
+    def _ingest():
+        try:
+            vpath = download_url(url, out_dir)
+            threading.Thread(target=run_job, args=(job_id, vpath, out_dir),
+                             daemon=True).start()
+        except Exception as e:  # noqa: BLE001
+            jobs[job_id].update(status="error", detail=str(e)[:300])
+
+    threading.Thread(target=_ingest, daemon=True).start()
     return jsonify({"job_id": job_id})
 
 

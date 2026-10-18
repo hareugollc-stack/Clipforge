@@ -17,11 +17,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from transcribe import transcribe
 from score import find_moments, make_hashtags
 from render import render_clip, probe_duration
+from ingest import download_url
 
 
 def main():
     ap = argparse.ArgumentParser(description="ClipForge — local AI video clipper")
-    ap.add_argument("input", help="input video file")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("input", nargs="?", help="input video file")
+    src.add_argument("--url", help="video URL to download and clip (YouTube etc.)")
     ap.add_argument("--clips", type=int, default=5, help="max clips to render")
     ap.add_argument("--out", default="output", help="output directory")
     ap.add_argument("--min-score", type=float, default=50,
@@ -30,6 +33,12 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
+
+    if args.url:
+        print("[0/4] Downloading video from link...")
+        args.input = download_url(args.url, args.out)
+        print(f"      downloaded → {os.path.basename(args.input)}")
+
     base = os.path.splitext(os.path.basename(args.input))[0]
 
     print("[1/4] Transcribing (local whisper, free)...")
