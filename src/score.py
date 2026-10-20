@@ -159,7 +159,11 @@ def make_hashtags(text, n=5):
             "steps", "last", "next", "every", "thing", "things", "some",
             "them", "then", "than", "into", "over", "under", "again",
             "still", "also", "because", "from", "about", "yourself",
-            "people", "peoples", "videos", "video", "clip", "clips"}
+            "people", "peoples", "videos", "video", "clip", "clips",
+            "said", "say", "says", "saying", "well", "know", "knows",
+            "right", "yeah", "yep", "okay", "stuff", "actually",
+            "basically", "mean", "means", "kinda", "sorta", "wanna",
+            "gimme", "lemme"}
     freq = {}
     for w in re.findall(r"[a-zA-Z]{4,}", text.lower()):
         if w not in stop:
